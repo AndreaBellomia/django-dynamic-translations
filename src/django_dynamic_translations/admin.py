@@ -26,6 +26,10 @@ class TranslatableAdmin(admin.ModelAdmin):
     def __init__(self, model: type[TranslatableModel], admin_site: admin.AdminSite) -> None:
         if not issubclass(model, TranslatableModel):
             raise ImproperlyConfigured("TranslatableAdmin requires a TranslatableModel.")
+        if not issubclass(self.form, TranslatableModelForm):
+            raise ImproperlyConfigured(
+                "Custom forms used by TranslatableAdmin must inherit from TranslatableModelForm."
+            )
         super().__init__(model, admin_site)
 
     def _get_shared_fields(self, request: HttpRequest, obj: Any = None) -> tuple[Any, ...]:

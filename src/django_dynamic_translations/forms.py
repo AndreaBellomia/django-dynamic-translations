@@ -206,10 +206,20 @@ def translatable_modelform_factory(
     model: type[TranslatableModel],
     *,
     form: type[TranslatableModelForm] = TranslatableModelForm,
+    fields: str | tuple[str, ...] = "__all__",
+    exclude: tuple[str, ...] | None = None,
 ) -> type[TranslatableModelForm]:
     """Create a reusable all-languages ModelForm for a translatable model."""
     base_meta = getattr(form, "Meta", object)
-    meta = type("Meta", (base_meta,), {"model": model, "fields": ()})
+    meta = type(
+        "Meta",
+        (base_meta,),
+        {
+            "model": model,
+            "fields": fields,
+            "exclude": exclude,
+        },
+    )
     return cast(
         type[TranslatableModelForm],
         TranslatableModelFormMetaclass(

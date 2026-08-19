@@ -193,8 +193,15 @@ class TranslatableQuerySet(QuerySet):
         )
         return queryset if len(languages) == 1 else queryset.distinct()
 
-    def prefetch_translations(self) -> TranslatableQuerySet:
-        return self.prefetch_related("translations")
+    def prefetch_translations(self, *related_lookups: str) -> TranslatableQuerySet:
+        """Prefetch this model's translations and selected related models' translations."""
+        if any(not lookup for lookup in related_lookups):
+            raise ValueError("Translation relation paths cannot be empty.")
+
+        translation_lookups = dict.fromkeys(
+            ("translations", *(f"{lookup}__translations" for lookup in related_lookups))
+        )
+        return self.prefetch_related(*translation_lookups)
 
     def bulk_create(
         self,
@@ -211,8 +218,21 @@ class TranslatableQuerySet(QuerySet):
         )
 
 
-class TranslatableManager(models.Manager.from_queryset(TranslatableQuerySet)):
-    pass
+class TranslatableManager(models.Manager):
+    _queryset_class = TranslatableQuerySet
+
+    def get_queryset(self) -> TranslatableQuerySet:
+        return cast(TranslatableQuerySet, super().get_queryset())
+
+    def translated(
+        self,
+        *language_codes: str,
+        **translated_fields: Any,
+    ) -> TranslatableQuerySet:
+        return self.get_queryset().translated(*language_codes, **translated_fields)
+
+    def prefetch_translations(self, *related_lookups: str) -> TranslatableQuerySet:
+        return self.get_queryset().prefetch_translations(*related_lookups)
 
 
 class TranslatableModelBase(ModelBase):
@@ -292,7 +312,7 @@ def _create_translation_model(shared_model: type[TranslatableModel]) -> type[Bas
 
 
 class TranslatableModel(models.Model, metaclass=TranslatableModelBase):
-    objects = TranslatableManager()
+    objects: ClassVar[TranslatableManager] = TranslatableManager()
 
     _translated_fields: dict[str, TranslatedField]
     _translation_model: type[BaseTranslation]

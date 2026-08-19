@@ -4,12 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "django-dynamic-translations"
-version = "0.1.0"
-description = "Model-specific Django translations with natural field aliases, forms, and admin integration."
+version = "0.2.0"
+description = "Model-specific Django translations with natural field aliases and first-class forms, admin, and DRF integration."
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Andrea Bellomia" }]
-keywords = ["django", "i18n", "localization", "translations"]
+keywords = ["django", "i18n", "localization", "translations", "admin", "drf"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: Django",
@@ -24,13 +26,19 @@ classifiers = [
 ]
 dependencies = ["Django>=5.2,<6.2"]
 
+[project.optional-dependencies]
+drf = ["djangorestframework>=3.15"]
+
 [project.urls]
 Homepage = "https://github.com/AndreaBellomia/django-dynamic-translations"
+Documentation = "https://github.com/AndreaBellomia/django-dynamic-translations#readme"
 Repository = "https://github.com/AndreaBellomia/django-dynamic-translations"
 Issues = "https://github.com/AndreaBellomia/django-dynamic-translations/issues"
+Changelog = "https://github.com/AndreaBellomia/django-dynamic-translations/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [
+    "djangorestframework>=3.15",
     "pyright>=1.1.403",
     "pytest>=8.4",
     "pytest-django>=4.11",
@@ -43,6 +51,8 @@ packages = ["src/django_dynamic_translations"]
 [tool.hatch.build.targets.sdist]
 include = [
     "/CHANGELOG.md",
+    "/CONTRIBUTING.md",
+    "/LICENSE",
     "/README.md",
     "/pyproject.toml",
     "/src",

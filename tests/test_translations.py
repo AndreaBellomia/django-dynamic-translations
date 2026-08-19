@@ -1,16 +1,23 @@
 from typing import Any, cast
 
 import pytest
+from django import forms
+from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.paginator import Paginator
 from django.urls import reverse
 from django.utils import translation
 
-from django_dynamic_translations.forms import get_translation_form_field_name
+from django_dynamic_translations.admin import TranslatableAdmin
+from django_dynamic_translations.forms import (
+    TranslatableModelForm,
+    get_translation_form_field_name,
+    translatable_modelform_factory,
+)
 from django_dynamic_translations.models import MissingDefaultTranslation
 from tests.test_app.forms import ArticleForm
-from tests.test_app.models import Article, ArticleTranslation
+from tests.test_app.models import Article, ArticleTranslation, Category
 
 DEFAULT_TRANSLATION = {
     "title": "Amalfi Coast",
@@ -90,6 +97,26 @@ class TestTranslationQueries:
                 f"Article {index}" for index in range(5)
             ]
 
+    def test_prefetch_can_include_related_models_translations(self, django_assert_num_queries):
+        category = Category.objects.create(name="Coast")
+        category.set_translation("it", name="Costa")
+        category.save()
+        article = Article.objects.create(**DEFAULT_TRANSLATION)
+        article.set_translation("it", **ITALIAN_TRANSLATION)
+        article.save()
+        article.categories.add(category)
+
+        with django_assert_num_queries(4):
+            article = Article.objects.prefetch_translations("categories").get()
+
+        with translation.override("it"), django_assert_num_queries(0):
+            assert article.title == ITALIAN_TRANSLATION["title"]
+            assert [item.name for item in article.categories.all()] == ["Costa"]
+
+    def test_prefetch_rejects_empty_related_path(self):
+        with pytest.raises(ValueError, match="cannot be empty"):
+            Article.objects.prefetch_translations("")
+
     def test_paginated_prefetch_is_constant(self, django_assert_num_queries):
         for index in range(3):
             Article.objects.create(
@@ -116,6 +143,18 @@ class TestTranslationQueries:
 
 @pytest.mark.django_db
 class TestTranslationForm:
+    def test_factory_includes_shared_model_fields_by_default(self):
+        form_class = translatable_modelform_factory(Article)
+
+        assert "categories" in form_class.base_fields
+        assert get_translation_form_field_name("en-us", "title") in form_class.base_fields
+
+    def test_factory_accepts_an_explicit_shared_field_subset(self):
+        form_class = translatable_modelform_factory(Article, fields=())
+
+        assert "categories" not in form_class.base_fields
+        assert get_translation_form_field_name("en-us", "title") in form_class.base_fields
+
     def test_form_exposes_every_configured_language(self):
         form = ArticleForm()
 
@@ -166,6 +205,27 @@ class TestTranslationForm:
 
 @pytest.mark.django_db
 class TestTranslationAdmin:
+    def test_admin_builds_a_translatable_form_automatically(self):
+        model_admin = admin.site._registry[Article]
+
+        form_class = model_admin.get_form(cast(Any, None))
+
+        assert issubclass(form_class, TranslatableModelForm)
+        assert get_translation_form_field_name("en-us", "title") in form_class.base_fields
+        assert get_translation_form_field_name("it", "title") in form_class.base_fields
+
+    def test_custom_admin_form_must_inherit_translatable_model_form(self):
+        class PlainArticleForm(forms.ModelForm):
+            class Meta:
+                model = Article
+                fields: tuple[str, ...] = ()
+
+        class InvalidArticleAdmin(TranslatableAdmin):
+            form = PlainArticleForm
+
+        with pytest.raises(ImproperlyConfigured, match="must inherit"):
+            InvalidArticleAdmin(Article, admin.AdminSite())
+
     def test_admin_renders_and_saves_every_language(self, client):
         user_model = get_user_model()
         user = user_model.objects.create_superuser(

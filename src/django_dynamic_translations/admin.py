@@ -78,6 +78,30 @@ class TranslatableAdmin(admin.ModelAdmin):
         queryset = cast(TranslatableQuerySet, super().get_queryset(request))
         return queryset.prefetch_translations()
 
+    def formfield_for_foreignkey(
+        self,
+        db_field: Any,
+        request: HttpRequest,
+        **kwargs: Any,
+    ) -> Any:
+        related_model = db_field.remote_field.model
+        if (
+            "queryset" not in kwargs
+            and isinstance(related_model, type)
+            and issubclass(related_model, TranslatableModel)
+        ):
+            queryset = related_model._base_manager.using(kwargs.get("using"))
+            ordered_queryset = super().get_field_queryset(
+                kwargs.get("using"),
+                db_field,
+                request,
+            )
+            if ordered_queryset is not None:
+                queryset = queryset.order_by(*ordered_queryset.query.order_by)
+            kwargs["queryset"] = queryset
+
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
     def save_related(
         self,
         request: HttpRequest,

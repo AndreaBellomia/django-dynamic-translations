@@ -1,8 +1,13 @@
 import pytest
 from django.utils import translation
 from rest_framework import serializers
+from rest_framework.test import APIRequestFactory
+from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from django_dynamic_translations.rest_framework import TranslatableModelSerializer
+from django_dynamic_translations.rest_framework import (
+    TranslatableLookupMixin,
+    TranslatableModelSerializer,
+)
 from tests.test_app.models import Article, Category
 
 DEFAULT_TRANSLATION = {
@@ -46,6 +51,15 @@ class ArticleDepthSerializer(TranslatableModelSerializer):
         model = Article
         depth = 1
         fields = "__all__"
+
+
+class ArticleViewSet(TranslatableLookupMixin, ReadOnlyModelViewSet):
+    queryset = Article.objects.prefetch_translations()
+    serializer_class = ArticleSerializer
+    lookup_field = "slug"
+
+
+article_detail = ArticleViewSet.as_view({"get": "retrieve"})
 
 
 class TestTranslatableModelSerializer:
@@ -136,3 +150,38 @@ class TestTranslatableModelSerializer:
             )
 
             assert serializer.is_valid(), serializer.errors
+
+
+@pytest.mark.django_db
+class TestTranslatableLookupMixin:
+    def test_retrieve_resolves_translated_lookup_in_active_language(self):
+        article = Article.objects.create(**DEFAULT_TRANSLATION)
+        article.set_translation("it", **ITALIAN_TRANSLATION)
+        article.save()
+        request = APIRequestFactory().get("/articles/costiera-amalfitana/")
+
+        with translation.override("it"):
+            response = article_detail(request, slug=ITALIAN_TRANSLATION["slug"])
+
+        assert response.status_code == 200
+        assert response.data["id"] == article.pk
+        assert response.data["slug"] == ITALIAN_TRANSLATION["slug"]
+
+    def test_missing_translated_lookup_returns_not_found(self):
+        Article.objects.create(**DEFAULT_TRANSLATION)
+        request = APIRequestFactory().get("/articles/not-found/")
+
+        response = article_detail(request, slug="not-found")
+
+        assert response.status_code == 404
+
+    def test_retrieve_uses_default_language_fallback(self):
+        article = Article.objects.create(**DEFAULT_TRANSLATION)
+        request = APIRequestFactory().get("/articles/amalfi-coast/")
+
+        with translation.override("it"):
+            response = article_detail(request, slug=DEFAULT_TRANSLATION["slug"])
+
+        assert response.status_code == 200
+        assert response.data["id"] == article.pk
+        assert response.data["slug"] == DEFAULT_TRANSLATION["slug"]

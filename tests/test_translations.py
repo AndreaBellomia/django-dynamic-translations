@@ -17,7 +17,13 @@ from django_dynamic_translations.forms import (
 )
 from django_dynamic_translations.models import MissingDefaultTranslation
 from tests.test_app.forms import ArticleForm
-from tests.test_app.models import Article, ArticleTranslation, Category
+from tests.test_app.models import (
+    Article,
+    ArticleTranslation,
+    Category,
+    Place,
+    PlaceSection,
+)
 
 DEFAULT_TRANSLATION = {
     "title": "Amalfi Coast",
@@ -225,6 +231,26 @@ class TestTranslationAdmin:
 
         with pytest.raises(ImproperlyConfigured, match="must inherit"):
             InvalidArticleAdmin(Article, admin.AdminSite())
+
+    def test_foreign_key_uses_master_base_manager_for_existing_selection(self, rf):
+        hidden_place = Place.all_objects.create(name="Hidden place", is_visible=False)
+        section = PlaceSection.objects.create(place=hidden_place, heading="Arrival")
+        request = rf.get("/admin/")
+        request.user = get_user_model().objects.create_superuser(
+            username="foreign-key-admin",
+            email="foreign-key-admin@example.com",
+            password="a-secure-password",
+        )
+
+        class PlaceSectionAdmin(TranslatableAdmin):
+            autocomplete_fields = ("place",)
+
+        model_admin = PlaceSectionAdmin(PlaceSection, admin.AdminSite())
+        form = model_admin.get_form(request, section)(instance=section)
+
+        assert form.fields["place"].queryset.filter(pk=hidden_place.pk).exists()
+        assert form.initial["place"] == hidden_place.pk
+        assert f'value="{hidden_place.pk}" selected' in str(form["place"])
 
     def test_admin_renders_and_saves_every_language(self, client):
         user_model = get_user_model()

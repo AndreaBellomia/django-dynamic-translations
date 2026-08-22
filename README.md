@@ -477,13 +477,22 @@ Translated serializer fields preserve the generated model field's type, length, 
 rules, and validators. Explicit field lists, `exclude`, and nested serializers created
 through `Meta.depth` are supported.
 
-Use a prefetched queryset in list endpoints:
+Use `TranslatableLookupMixin` when a detail endpoint's `lookup_field` is translated.
+The mixin resolves the value through `translated()` in Django's active language, with
+the same default-language fallback used when reading translated aliases:
 
 ```python
-class ArticleViewSet(ModelViewSet):
+from django_dynamic_translations.rest_framework import TranslatableLookupMixin
+
+
+class ArticleViewSet(TranslatableLookupMixin, ModelViewSet):
     queryset = Article.objects.prefetch_translations("categories")
     serializer_class = ArticleSerializer
+    lookup_field = "slug"
 ```
+
+The mixin leaves ordinary, non-translated lookup fields unchanged. Use a prefetched
+queryset in list endpoints to avoid per-object translation queries.
 
 With `LocaleMiddleware`, serialized aliases follow the request's active language and
 fall back to the default language. Creates write the required default translation;

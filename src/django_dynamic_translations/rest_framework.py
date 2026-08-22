@@ -1,7 +1,10 @@
 from typing import Any, cast
 
+from django_dynamic_translations.models import get_default_language_code
+
 try:
     from rest_framework import serializers
+    from rest_framework.generics import get_object_or_404
     from rest_framework.utils.field_mapping import get_nested_relation_kwargs
     from rest_framework.validators import UniqueValidator
 except ImportError as error:  # pragma: no cover - exercised only without the optional extra
@@ -9,6 +12,39 @@ except ImportError as error:  # pragma: no cover - exercised only without the op
         "Django REST Framework support requires the optional 'drf' extra. "
         "Install django-dynamic-translations[drf]."
     ) from error
+
+
+class TranslatableLookupMixin:
+    """Resolve DRF detail lookups stored on a model's translation table."""
+
+    def get_object(self) -> Any:
+        view = cast(Any, self)
+        queryset = view.filter_queryset(view.get_queryset())
+        lookup_url_kwarg = view.lookup_url_kwarg or view.lookup_field
+
+        assert lookup_url_kwarg in view.kwargs, (
+            f"Expected view {self.__class__.__name__} to be called with a URL keyword "
+            f'argument named "{lookup_url_kwarg}". Fix your URL conf, or set the '
+            ".lookup_field attribute on the view correctly."
+        )
+
+        lookup_value = view.kwargs[lookup_url_kwarg]
+        translated_fields = getattr(queryset.model, "_translated_fields", {})
+        if view.lookup_field in translated_fields:
+            language_codes = [queryset.model._effective_language_code()]
+            default_language = get_default_language_code()
+            if default_language not in language_codes:
+                language_codes.append(default_language)
+            queryset = queryset.translated(
+                *language_codes,
+                **{view.lookup_field: lookup_value},
+            )
+            obj = get_object_or_404(queryset)
+        else:
+            obj = get_object_or_404(queryset, **{view.lookup_field: lookup_value})
+
+        view.check_object_permissions(view.request, obj)
+        return obj
 
 
 class _TranslatedUniqueValidator(UniqueValidator):

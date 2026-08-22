@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- Add a Django REST Framework mixin for detail lookups on translated fields.
+
 ## 0.2.0 - 2026-08-19
 
 - Allow `prefetch_translations()` to include translations from selected related models.

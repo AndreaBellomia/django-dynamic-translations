@@ -4,7 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.3.0 - 2026-09-07
+
 - Add a Django REST Framework mixin for detail lookups on translated fields.
+- Add an optional django-filter `TranslatableFilterSet` integration.
 
 ## 0.2.0 - 2026-08-19
 

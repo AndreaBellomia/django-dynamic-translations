@@ -10,7 +10,7 @@ Natural, model-specific translations for Django.
 model while storing them in a generated, model-specific translation table. Application
 code reads familiar attributes such as `article.title`; the library handles active
 languages, fallback, forms, admin integration, query helpers, and optional Django REST
-Framework serializers.
+Framework and django-filter integrations.
 
 ```python
 class Article(TranslatableModel):
@@ -37,6 +37,7 @@ The declaration above generates an `ArticleTranslation` model and exposes `title
 - Automatic all-languages Django Admin forms.
 - Reusable `ModelForm` integration for standalone workflows.
 - Optional Django REST Framework serializer support.
+- Optional django-filter `FilterSet` support.
 - Normal Django migrations, relations, field validation, and database constraints.
 - Typed public APIs for Python 3.12 and newer.
 
@@ -50,6 +51,7 @@ The declaration above generates an `ArticleTranslation` model and exposes `title
 - [Forms](#forms)
 - [Django Admin](#django-admin)
 - [Django REST Framework](#django-rest-framework)
+- [django-filter](#django-filter)
 - [Validation and lifecycle rules](#validation-and-lifecycle-rules)
 - [Static typing](#static-typing)
 - [Development and contributing](#development-and-contributing)
@@ -66,6 +68,12 @@ For Django REST Framework support, install the optional extra:
 
 ```bash
 python -m pip install "django-dynamic-translations[drf]"
+```
+
+For django-filter support, install its optional extra:
+
+```bash
+python -m pip install "django-dynamic-translations[filters]"
 ```
 
 Add the application to `INSTALLED_APPS`:
@@ -502,6 +510,39 @@ For endpoints that accept several languages in one request, model that payload
 explicitly and call `set_translation()` for each language rather than relying on the
 single-language aliases.
 
+## django-filter
+
+Install the optional extra:
+
+```bash
+python -m pip install "django-dynamic-translations[filters]"
+```
+
+Subclass `TranslatableFilterSet` to declare translated fields in `Meta.fields` just
+like ordinary model fields:
+
+```python
+from django_dynamic_translations.django_filters import TranslatableFilterSet
+
+
+class ArticleFilter(TranslatableFilterSet):
+    class Meta:
+        model = Article
+        fields = {
+            "title": ["exact", "icontains"],
+            "is_published": ["exact"],
+        }
+```
+
+Generated filters use the field type and options from the generated translation model.
+Translated lookups use Django's active language and follow the same stored-value query
+semantics as `QuerySet.translated()`: filtering does not apply the read-time
+default-language fallback.
+
+Declared filters whose `field_name` is a translated field are handled automatically.
+Filters using `method=` remain application-defined; call `queryset.translated()` inside
+the method when it needs to query a translated field.
+
 ## Validation and lifecycle rules
 
 - A complete default-language translation is required before a new object can be saved.
@@ -545,6 +586,7 @@ articles = manager.prefetch_translations("categories")
 | `django_dynamic_translations.forms` | `TranslatableModelForm`, `translatable_modelform_factory`, translation form-field naming helpers |
 | `django_dynamic_translations.admin` | `TranslatableAdmin` |
 | `django_dynamic_translations.rest_framework` | `TranslatableModelSerializer` when the `drf` extra is installed |
+| `django_dynamic_translations.django_filters` | `TranslatableFilterSet` when the `filters` extra is installed |
 
 ## Development and contributing
 
